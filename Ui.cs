@@ -16,20 +16,24 @@ public static class Ui
     public static Label Titulo(string t) => new() { Text = t, TextColor = Rojo, FontAttributes = FontAttributes.Bold, FontSize = 14 };
     public static DateTime D(object? d) => Convert.ToDateTime(d); // DatePicker.Date: nullable en .NET 10
 
-    static Label Copiable(string texto, string valorACopiar)
+   static Button Copiable(string texto, string valorACopiar)
+{
+    var b = new Button
     {
-        var l = new Label { Text = texto, TextColor = Colors.Gray, TextDecorations = TextDecorations.Underline };
-        var tap = new TapGestureRecognizer();
-        tap.Tapped += async (_, _) =>
-        {
-            await Clipboard.Default.SetTextAsync(valorACopiar);
-            l.Text = "✓ Copiado";
-            await Task.Delay(1000);
-            l.Text = texto;
-        };
-        l.GestureRecognizers.Add(tap);
-        return l;
-    }
+        Text = texto, TextColor = Pizarra, BackgroundColor = Colors.Transparent,
+        BorderColor = Colors.LightGray, BorderWidth = 1, CornerRadius = 8,
+        Padding = new Thickness(10, 0), HeightRequest = 34, FontSize = 14,
+        HorizontalOptions = LayoutOptions.Start
+    };
+    b.Clicked += async (_, _) =>
+    {
+        await Clipboard.Default.SetTextAsync(valorACopiar);
+        b.Text = "✓ Copiado";
+        await Task.Delay(1000);
+        b.Text = texto;
+    };
+    return b;
+}
 
     public static View FilaCard(Fila f, params View[] extra)
     {
@@ -41,7 +45,6 @@ public static class Ui
                 new Label { Text = f.Cliente, FontSize = 18, FontAttributes = FontAttributes.Bold, TextColor = Pizarra },
                 new HorizontalStackLayout { Spacing = 8, Children = {
     Copiable(f.Rut, f.Rut.Replace("-", "").Replace(".", "")),
-    new Label { Text = "·", TextColor = Colors.Gray },
     Copiable(f.PcsFmt, f.Pcs.Replace(" ", "")) } },
                 new Label { Text = f.NombrePlan, TextColor = Rojo },
                 new Label { Text = $"Venta {f.FechaVenta}  ·  Activación {f.FechaActivacion ?? "—"}  ·  {f.Estado}", FontSize = 12, TextColor = Colors.Gray }
@@ -50,5 +53,46 @@ public static class Ui
         foreach (var e in extra) s.Children.Add(e);
         return Card(s);
     }
+
+    public static View ConFab(View contenido)
+{
+    // deja espacio abajo para que el botón no tape el final de la lista
+    if (contenido is ScrollView { Content: Layout l })
+        l.Padding = new Thickness(l.Padding.Left, l.Padding.Top, l.Padding.Right, 96);
+
+    var fab = new Border
+    {
+        HeightRequest = 52, Padding = new Thickness(22, 0), StrokeThickness = 0, BackgroundColor = Rojo,
+        StrokeShape = new RoundRectangle { CornerRadius = 26 },
+        Shadow = new Shadow { Opacity = .35f, Radius = 8, Offset = new Point(0, 3) },
+        HorizontalOptions = LayoutOptions.End, VerticalOptions = LayoutOptions.End, Margin = new Thickness(0, 0, 20, 20),
+        Content = new Label { Text = "Nueva Venta", TextColor = Colors.White, FontSize = 16, FontAttributes = FontAttributes.Bold,
+            HorizontalOptions = LayoutOptions.Center, VerticalOptions = LayoutOptions.Center }
+    };
+
+    var tap = new TapGestureRecognizer();
+    tap.Tapped += async (_, _) => await Shell.Current.Navigation.PushModalAsync(new NuevaVentaPage());
+    fab.GestureRecognizers.Add(tap);
+
+    var g = new Grid();
+    g.Children.Add(contenido); g.Children.Add(fab);
+    return g;
+}
+
+public static event Action? DatosCambiaron;
+public static void AvisarCambio() => DatosCambiaron?.Invoke();
+
+public static View ConEncabezado(string titulo, View contenido, Func<Task> cerrar)
+{
+    var cerrarBtn = new Button { Text = "Cerrar", TextColor = Colors.White, BackgroundColor = Colors.Transparent, FontAttributes = FontAttributes.Bold };
+    cerrarBtn.Clicked += async (_, _) => await cerrar();
+    var cab = new Grid { BackgroundColor = Rojo, Padding = new Thickness(16, 4), ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) } };
+    cab.Add(new Label { Text = titulo, TextColor = Colors.White, FontSize = 20, FontAttributes = FontAttributes.Bold, VerticalOptions = LayoutOptions.Center }, 0, 0);
+    cab.Add(cerrarBtn, 1, 0);
+    contenido.BackgroundColor = Fondo;
+    var g = new Grid { RowDefinitions = { new RowDefinition(GridLength.Auto), new RowDefinition(GridLength.Star) } };
+    g.Add(cab, 0, 0); g.Add(contenido, 0, 1);
+    return g;
+}
 
 }

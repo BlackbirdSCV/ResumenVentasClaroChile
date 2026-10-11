@@ -9,11 +9,14 @@ public class HomePage : ContentPage
     public HomePage()
     {
         Title = "Resumen de Ventas"; BackgroundColor = Ui.Fondo;
+        SafeAreaEdges = new SafeAreaEdges(SafeAreaRegions.All); // la página se achica cuando aparece el teclado
         Content = new ScrollView { Content = new VerticalStackLayout { Padding = 16, Spacing = 16, Children = {
             Ui.Card(new VerticalStackLayout { Children = { Ui.Titulo("VENTAS ACTIVAS DEL MES"), activas } }),
             Ui.Titulo("SOLICITUDES PENDIENTES"), lista } } };
     }
-    protected override async void OnAppearing() { base.OnAppearing(); await Cargar(); }
+    protected override async void OnAppearing() { base.OnAppearing(); await Cargar();
+    Ui.DatosCambiaron += async () => await Cargar();
+    Content = Ui.ConFab(Content);}
 
     async Task Cargar()
 {
@@ -57,6 +60,9 @@ public class NuevaVentaPage : ContentPage
         Content = new ScrollView { Content = new VerticalStackLayout { Padding = 16, Children = { Ui.Card(new VerticalStackLayout { Spacing = 8, Children = {
             Ui.Titulo("CLIENTE"), rut, nombre, apellido, Ui.Titulo("VENTA"), pcs, plan, estado,
             new Label { Text = "Fecha de venta" }, fVenta, actLbl, fAct, guardar } }) } } };
+            BackgroundColor = Ui.Rojo;
+        SafeAreaEdges = new SafeAreaEdges(SafeAreaRegions.All);
+        Content = Ui.ConEncabezado("Nueva venta", Content, async () => await Navigation.PopModalAsync());
     }
 
     protected override async void OnAppearing()
@@ -77,6 +83,7 @@ public class NuevaVentaPage : ContentPage
         var est = (string)estado.SelectedItem;
         DateTime? act = est == "Activa" ? Ui.D(fAct.Date) : null;
         await Db.GuardarVenta(rut.Text, nombre.Text.Trim(), apellido.Text.Trim(), pcs.Text, planes[plan.SelectedIndex].Id, Ui.D(fVenta.Date), est, act);
+        Ui.AvisarCambio();
         rut.Text = nombre.Text = apellido.Text = pcs.Text = ""; plan.SelectedIndex = -1; estado.SelectedIndex = 0;
         await DisplayAlert("Listo", "Venta guardada.", "OK");
     }
@@ -130,6 +137,8 @@ public class ResumenPage : ContentPage
         filtros.Add(filtroEstado, 0, 1); Grid.SetColumnSpan(filtroEstado, 2);
 
         Content = new ScrollView { Content = new VerticalStackLayout { Padding = 16, Spacing = 12, Children = { nav, rango, modoFecha, filtros, total, lista } } };
+        Ui.DatosCambiaron += async () => await Cargar();
+        Content = Ui.ConFab(Content);
     }
 
     protected override async void OnAppearing()
@@ -197,6 +206,7 @@ public class PlanesPage : ContentPage
         Content = new ScrollView { Content = new VerticalStackLayout { Padding = 16, Spacing = 16, Children = {
             Ui.Card(new VerticalStackLayout { Spacing = 8, Children = { tituloForm, nombre, valor, guardar, cancelar } }),
             Ui.Titulo("PLANES"), lista } } };
+            Content = Ui.ConFab(Content);
     }
     protected override async void OnAppearing() { base.OnAppearing(); await Cargar(); }
 
@@ -277,6 +287,7 @@ public class RespaldoPage : ContentPage
             Ui.Card(new VerticalStackLayout { Spacing = 10, Children = {
                 Ui.Titulo("RESPALDO EN GOOGLE DRIVE"), estado, conectar, subir, bajar, salir,
                 new Label { Text = "El respaldo es una copia completa de tus datos y queda en una carpeta privada de la app en tu Drive. Úsalo desde un solo teléfono a la vez.", FontSize = 12, TextColor = Colors.Gray } } }) } } };
+                Content = Ui.ConFab(Content);
     }
 
     static async Task Marcar()
@@ -364,5 +375,83 @@ public class EditarVentaPage : ContentPage
 
         await Db.ActualizarVenta(id, rut.Text, nombre.Text.Trim(), apellido.Text.Trim(), pcs.Text, planes[plan.SelectedIndex].Id, fv, est, act);
         await Navigation.PopAsync();
+    }
+}
+
+public abstract class WebPageBase : ContentPage
+{
+    readonly WebView web = new();
+
+    protected WebPageBase(string titulo, string url)
+    {
+        Title = titulo; BackgroundColor = Ui.Fondo;
+        SafeAreaEdges = new SafeAreaEdges(SafeAreaRegions.All); // la página se achica cuando aparece el teclado
+
+        web.Navigated += async (_, _) =>
+        {
+            try
+            {
+                await web.EvaluateJavaScriptAsync(@"
+if(!window.__ventasFoco){
+  window.__ventasFoco=true;
+  var ver=function(){var a=document.activeElement;
+    if(a&&a!==document.body&&(a.tagName==='INPUT'||a.tagName==='TEXTAREA'||a.tagName==='SELECT'))
+      a.scrollIntoView({block:'center'});};
+  document.addEventListener('focusin',function(){setTimeout(ver,300);setTimeout(ver,700);});
+  window.addEventListener('resize',function(){setTimeout(ver,100);});
+}");
+            }
+            catch { }
+        };
+
+        Content = web;
+        web.Source = url;
+    }
+
+    // El botón Atrás de Android retrocede dentro de la página antes de salir
+    protected override bool OnBackButtonPressed()
+    {
+        if (web.CanGoBack) { web.GoBack(); return true; }
+        return base.OnBackButtonPressed();
+    }
+}
+
+public class PagoExpressPage : WebPageBase
+{
+    public PagoExpressPage() : base("Portal Pagos", "https://sucursalvirtual.clarochile.cl/PagoExpress/index") { }
+}
+
+public class NumerosPortadosPage : WebPageBase
+{
+    public NumerosPortadosPage() : base("Revisar Activaciones", "https://www.numerosportados.cl/PublicWebsite/#/tn-inquiry") { }
+}
+
+public class MasPage : ContentPage
+{
+    public MasPage()
+    {
+        Title = "Más"; BackgroundColor = Ui.Fondo;
+        var lista = new VerticalStackLayout { Padding = 16, Spacing = 12 };
+        lista.Children.Add(Opcion("Planes", "Crear, editar y eliminar planes", () => new PlanesPage()));
+        lista.Children.Add(Opcion("Portal Pagos", "Pago Express de Claro", () => new PagoExpressPage()));
+        lista.Children.Add(Opcion("Números portados", "Consulta de portabilidad", () => new NumerosPortadosPage()));
+        lista.Children.Add(Opcion("Respaldo", "Copia de tus datos en Google Drive", () => new RespaldoPage()));
+        lista.Children.Add(new Label
+        {
+        Text = $"Versión {AppInfo.Current.VersionString} (compilación {AppInfo.Current.BuildString})",
+        TextColor = Colors.Gray, FontSize = 12, HorizontalOptions = LayoutOptions.Center, Margin = new Thickness(0, 12, 0, 0)
+        });
+        Content = Ui.ConFab(new ScrollView { Content = lista });
+    }
+
+    View Opcion(string titulo, string detalle, Func<Page> crear)
+    {
+        var card = Ui.Card(new VerticalStackLayout { Spacing = 2, Children = {
+            new Label { Text = titulo, FontSize = 18, FontAttributes = FontAttributes.Bold, TextColor = Ui.Pizarra },
+            new Label { Text = detalle, TextColor = Colors.Gray } } });
+        var tap = new TapGestureRecognizer();
+        tap.Tapped += async (_, _) => await Navigation.PushAsync(crear());
+        card.GestureRecognizers.Add(tap);
+        return card;
     }
 }
