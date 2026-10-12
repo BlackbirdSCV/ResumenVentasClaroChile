@@ -24,14 +24,32 @@ public class HomePage : ContentPage
     lista.Children.Clear();
     foreach (var f in await Db.Pendientes())
     {
-        var id = f.Id;
-        var ok = new Button { Text = "Marcar activa", BackgroundColor = Ui.Rojo, TextColor = Colors.White };
+        var id = f.Id; var pcs = f.Pcs;
         var edit = new Button { Text = "Editar", BackgroundColor = Ui.Pizarra, TextColor = Colors.White };
+        var ok = new Button { Text = "Marcar activa", BackgroundColor = Ui.Rojo, TextColor = Colors.White };
         var del = new Button { Text = "Eliminar", BackgroundColor = Colors.Gray, TextColor = Colors.White };
+        var revisar = new Button { Text = "Revisar activación", BackgroundColor = Ui.Rojo, TextColor = Colors.White };
+        foreach (var b in new[] { ok, edit, del }) { b.FontSize = 13; b.Padding = new Thickness(4, 10); } // para que el texto quepa en un tercio del ancho
+
+        revisar.Clicked += async (_, _) =>
+        {
+            await Clipboard.Default.SetTextAsync(pcs); // respaldo: pegar si el relleno falla
+            await Shell.Current.Navigation.PushModalAsync(new NumerosPortadosPage(pcs));
+        };
         ok.Clicked += async (_, _) => { await Db.Activar(id); await Cargar(); };
         edit.Clicked += async (_, _) => await Navigation.PushAsync(new EditarVentaPage(id));
         del.Clicked += async (_, _) => { if (await DisplayAlert("Eliminar", "¿Eliminar esta venta?", "Sí", "No")) { await Db.Eliminar(id); await Cargar(); } };
-        lista.Children.Add(Ui.FilaCard(f, new HorizontalStackLayout { Spacing = 8, Children = { ok, edit, del } }));
+
+        var botones = new Grid
+        {
+            ColumnSpacing = 8, RowSpacing = 8,
+            ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star) },
+            RowDefinitions = { new RowDefinition(GridLength.Auto), new RowDefinition(GridLength.Auto) }
+        };
+        botones.Add(edit, 0, 0); botones.Add(ok, 1, 0); botones.Add(del, 2, 0);
+        botones.Add(revisar, 0, 1); Grid.SetColumnSpan(revisar, 3);
+
+        lista.Children.Add(Ui.FilaCard(f, botones));
     }
 }
 }
@@ -382,7 +400,7 @@ public abstract class WebPageBase : ContentPage
 {
     readonly WebView web = new();
 
-    protected WebPageBase(string titulo, string url)
+    protected WebPageBase(string titulo, string url, string? numero = null)
     {
         Title = titulo; BackgroundColor = Ui.Fondo;
         SafeAreaEdges = new SafeAreaEdges(SafeAreaRegions.All); // la página se achica cuando aparece el teclado
@@ -400,12 +418,37 @@ if(!window.__ventasFoco){
   document.addEventListener('focusin',function(){setTimeout(ver,300);setTimeout(ver,700);});
   window.addEventListener('resize',function(){setTimeout(ver,100);});
 }");
+                if (!string.IsNullOrEmpty(numero)) await web.EvaluateJavaScriptAsync(ScriptRelleno(numero));
             }
             catch { }
         };
 
         Content = web;
         web.Source = url;
+    }
+
+    // Espera a que aparezca el campo del número (la página se dibuja con JavaScript) y lo rellena
+    static string ScriptRelleno(string numero)
+    {
+        var n = new string(numero.Where(char.IsDigit).ToArray());
+        return @"
+(function(n){
+  var intentos=0;
+  var id=setInterval(function(){
+    var i=document.querySelector('input[placeholder*=""deseas consultar""]')
+        ||document.querySelector('input[type=tel]')
+        ||document.querySelector('input[type=text]');
+    if(i){
+      if(!i.value){
+        var set=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;
+        set.call(i,n);
+        i.dispatchEvent(new Event('input',{bubbles:true}));
+        i.dispatchEvent(new Event('change',{bubbles:true}));
+      }
+      clearInterval(id);
+    } else if(++intentos>40){ clearInterval(id); }
+  },250);
+})('" + n + "');";
     }
 
     // El botón Atrás de Android retrocede dentro de la página antes de salir
@@ -416,14 +459,22 @@ if(!window.__ventasFoco){
     }
 }
 
+public class NumerosPortadosPage : WebPageBase
+{
+    public NumerosPortadosPage(string? numero = null)
+        : base("Números portados", "https://www.numerosportados.cl/PublicWebsite/#/tn-inquiry", numero)
+    {
+        if (numero != null) // abierta desde una venta: pantalla modal con encabezado propio
+        {
+            BackgroundColor = Ui.Rojo;
+            Content = Ui.ConEncabezado("Revisar activación", Content, async () => await Navigation.PopModalAsync());
+        }
+    }
+}
+
 public class PagoExpressPage : WebPageBase
 {
     public PagoExpressPage() : base("Portal Pagos", "https://sucursalvirtual.clarochile.cl/PagoExpress/index") { }
-}
-
-public class NumerosPortadosPage : WebPageBase
-{
-    public NumerosPortadosPage() : base("Revisar Activaciones", "https://www.numerosportados.cl/PublicWebsite/#/tn-inquiry") { }
 }
 
 public class MasPage : ContentPage
@@ -438,7 +489,7 @@ public class MasPage : ContentPage
         lista.Children.Add(Opcion("Respaldo", "Copia de tus datos en Google Drive", () => new RespaldoPage()));
         lista.Children.Add(new Label
         {
-        Text = $"Versión {AppInfo.Current.VersionString} (compilación {AppInfo.Current.BuildString})",
+        Text = $"Versión {AppInfo.Current.VersionString}",
         TextColor = Colors.Gray, FontSize = 12, HorizontalOptions = LayoutOptions.Center, Margin = new Thickness(0, 12, 0, 0)
         });
         Content = Ui.ConFab(new ScrollView { Content = lista });
