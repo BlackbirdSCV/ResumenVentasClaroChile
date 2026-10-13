@@ -197,12 +197,21 @@ public class ResumenPage : ContentPage
         total.Text = $"{filas.Count} ventas listadas  ·  {activadas} activadas {periodo}";
         lista.Children.Clear();
         foreach (var f in filas)
-        {
-            var id = f.Id;
-            var edit = new Button { Text = "Editar", BackgroundColor = Ui.Pizarra, TextColor = Colors.White, HorizontalOptions = LayoutOptions.Start };
-            edit.Clicked += async (_, _) => await Navigation.PushAsync(new EditarVentaPage(id));
-            lista.Children.Add(Ui.FilaCard(f, edit));
-        }
+{
+    var id = f.Id;
+    var rut = f.Rut.Replace("-", "").Replace(".", ""); // mismo formato que al copiar el RUT en la tarjeta
+    var edit = new Button { Text = "Editar", BackgroundColor = Ui.Pizarra, TextColor = Colors.White };
+    var pago = new Button { Text = "Revisar pago", BackgroundColor = Ui.Rojo, TextColor = Colors.White };
+    edit.Clicked += async (_, _) => await Navigation.PushAsync(new EditarVentaPage(id));
+    pago.Clicked += async (_, _) =>
+    {
+        await Clipboard.Default.SetTextAsync(rut);
+        await Shell.Current.Navigation.PushModalAsync(new PagoExpressPage(rut));
+    };
+    var botones = new Grid { ColumnSpacing = 8, ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star) } };
+    botones.Add(edit, 0, 0); botones.Add(pago, 1, 0);
+    lista.Children.Add(Ui.FilaCard(f, botones));
+}
     }
 }
 
@@ -400,7 +409,7 @@ public abstract class WebPageBase : ContentPage
 {
     readonly WebView web = new();
 
-    protected WebPageBase(string titulo, string url, string? numero = null)
+    protected WebPageBase(string titulo, string url, string? valor = null, string[]? campos = null)
     {
         Title = titulo; BackgroundColor = Ui.Fondo;
         SafeAreaEdges = new SafeAreaEdges(SafeAreaRegions.All); // la página se achica cuando aparece el teclado
@@ -418,7 +427,7 @@ if(!window.__ventasFoco){
   document.addEventListener('focusin',function(){setTimeout(ver,300);setTimeout(ver,700);});
   window.addEventListener('resize',function(){setTimeout(ver,100);});
 }");
-                if (!string.IsNullOrEmpty(numero)) await web.EvaluateJavaScriptAsync(ScriptRelleno(numero));
+                if (!string.IsNullOrEmpty(valor)) await web.EvaluateJavaScriptAsync(ScriptRelleno(valor, campos ?? Array.Empty<string>()));
             }
             catch { }
         };
@@ -427,28 +436,31 @@ if(!window.__ventasFoco){
         web.Source = url;
     }
 
-    // Espera a que aparezca el campo del número (la página se dibuja con JavaScript) y lo rellena
-    static string ScriptRelleno(string numero)
+    // Busca el campo (la página se dibuja con JavaScript, así que espera a que aparezca) y escribe el valor
+    static string ScriptRelleno(string valor, string[] campos)
     {
-        var n = new string(numero.Where(char.IsDigit).ToArray());
+        var v = new string(valor.Where(char.IsLetterOrDigit).ToArray());
+        var sel = "[" + string.Join(",", campos.Select(s => "'" + s.Replace("'", "\\'") + "'")) + "]";
         return @"
-(function(n){
-  var intentos=0;
+(function(v,sels){
+  var n=0;
+  var poner=function(i){
+    if(i.value) return;
+    var set=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;
+    set.call(i,v);
+    i.dispatchEvent(new Event('input',{bubbles:true}));
+    i.dispatchEvent(new Event('change',{bubbles:true}));
+  };
   var id=setInterval(function(){
-    var i=document.querySelector('input[placeholder*=""deseas consultar""]')
-        ||document.querySelector('input[type=tel]')
-        ||document.querySelector('input[type=text]');
-    if(i){
-      if(!i.value){
-        var set=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;
-        set.call(i,n);
-        i.dispatchEvent(new Event('input',{bubbles:true}));
-        i.dispatchEvent(new Event('change',{bubbles:true}));
-      }
-      clearInterval(id);
-    } else if(++intentos>40){ clearInterval(id); }
+    n++;
+    for(var k=0;k<sels.length;k++){var i=document.querySelector(sels[k]); if(i){poner(i);clearInterval(id);return;}}
+    if(n>30){
+      var g=document.querySelectorAll('input[type=text],input[type=tel],input:not([type])');
+      for(var j=0;j<g.length;j++){ if(g[j].offsetParent!==null){poner(g[j]);clearInterval(id);return;} }
+    }
+    if(n>120) clearInterval(id);
   },250);
-})('" + n + "');";
+})('" + v + "'," + sel + ");";
     }
 
     // El botón Atrás de Android retrocede dentro de la página antes de salir
@@ -459,10 +471,31 @@ if(!window.__ventasFoco){
     }
 }
 
+public class PagoExpressPage : WebPageBase
+{
+    static readonly string[] Campos =
+    {
+        "input[placeholder*=\"rut\" i]", "input[name*=\"rut\" i]", "input[id*=\"rut\" i]",
+        "input[formcontrolname*=\"rut\" i]", "input[aria-label*=\"rut\" i]"
+    };
+
+    public PagoExpressPage(string? rut = null)
+        : base("Portal Pagos", "https://sucursalvirtual.clarochile.cl/PagoExpress/index", rut, Campos)
+    {
+        if (rut != null) // abierta desde una venta: pantalla modal con encabezado propio
+        {
+            BackgroundColor = Ui.Rojo;
+            Content = Ui.ConEncabezado("Revisar pago", Content, async () => await Navigation.PopModalAsync());
+        }
+    }
+}
+
 public class NumerosPortadosPage : WebPageBase
 {
+    static readonly string[] Campos = { "input[placeholder*=\"deseas consultar\"]", "input[type=tel]", "input[type=text]" };
+
     public NumerosPortadosPage(string? numero = null)
-        : base("Números portados", "https://www.numerosportados.cl/PublicWebsite/#/tn-inquiry", numero)
+        : base("Números portados", "https://www.numerosportados.cl/PublicWebsite/#/tn-inquiry", numero, Campos)
     {
         if (numero != null) // abierta desde una venta: pantalla modal con encabezado propio
         {
@@ -470,11 +503,6 @@ public class NumerosPortadosPage : WebPageBase
             Content = Ui.ConEncabezado("Revisar activación", Content, async () => await Navigation.PopModalAsync());
         }
     }
-}
-
-public class PagoExpressPage : WebPageBase
-{
-    public PagoExpressPage() : base("Portal Pagos", "https://sucursalvirtual.clarochile.cl/PagoExpress/index") { }
 }
 
 public class MasPage : ContentPage
@@ -489,8 +517,8 @@ public class MasPage : ContentPage
         lista.Children.Add(Opcion("Respaldo", "Copia de tus datos en Google Drive", () => new RespaldoPage()));
         lista.Children.Add(new Label
         {
-        Text = $"Versión {AppInfo.Current.VersionString}",
-        TextColor = Colors.Gray, FontSize = 12, HorizontalOptions = LayoutOptions.Center, Margin = new Thickness(0, 12, 0, 0)
+            Text = $"Versión {AppInfo.Current.VersionString}",
+            TextColor = Colors.Gray, FontSize = 12, HorizontalOptions = LayoutOptions.Center, Margin = new Thickness(0, 12, 0, 0)
         });
         Content = Ui.ConFab(new ScrollView { Content = lista });
     }
