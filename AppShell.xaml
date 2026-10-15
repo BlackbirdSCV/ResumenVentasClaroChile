@@ -10,6 +10,7 @@
     <TabBar>
         <ShellContent Title="Inicio" ContentTemplate="{DataTemplate local:HomePage}" />
         <ShellContent Title="Resumen" ContentTemplate="{DataTemplate local:ResumenPage}" />
+        <ShellContent Title="Kits" ContentTemplate="{DataTemplate local:KitsPage}" />
         <ShellContent Title="M&#225;s" ContentTemplate="{DataTemplate local:MasPage}" />
     </TabBar>
 </Shell>

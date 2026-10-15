@@ -35,7 +35,7 @@ public static class Db
     {
         var path = Path.Combine(FileSystem.AppDataDirectory, "ventas_claro.db3");
         var c = new SQLiteAsyncConnection(path, SQLiteOpenFlags.ReadWrite | SQLiteOpenFlags.Create | SQLiteOpenFlags.SharedCache, false);
-        await c.CreateTableAsync<Cliente>(); await c.CreateTableAsync<PlanMovil>(); await c.CreateTableAsync<Venta>();
+        await c.CreateTableAsync<Cliente>(); await c.CreateTableAsync<PlanMovil>(); await c.CreateTableAsync<Venta>(); await c.CreateTableAsync<Kit>();
         if (!Preferences.Get("seed_hecho", false))
     {
         if (await c.Table<PlanMovil>().CountAsync() == 0) await Seed(c);
@@ -179,4 +179,21 @@ public static async Task ActualizarVenta(int id, string rut, string nombre, stri
     await c.ExecuteAsync("DELETE FROM Cliente WHERE Id NOT IN (SELECT IdCliente FROM Venta)"); // limpia clientes sin ventas
 }
 
+public static async Task<Kit?> KitPorSim(string sim) =>
+    await (await C()).Table<Kit>().Where(k => k.Sim == sim).FirstOrDefaultAsync();
+
+public static async Task AgregarKit(string sim) =>
+    await (await C()).InsertAsync(new Kit { Sim = sim, FechaHora = DateTime.Now });
+
+public static async Task<List<Kit>> Kits(string mes) =>
+    await (await C()).QueryAsync<Kit>("SELECT * FROM Kit WHERE strftime('%Y-%m',FechaHora)=? ORDER BY FechaHora DESC", mes);
+
+public static async Task EliminarKit(int id) => await (await C()).DeleteAsync<Kit>(id);
+
+}
+public class Kit
+{
+    [PrimaryKey, AutoIncrement] public int Id { get; set; }
+    public string Sim { get; set; } = "";
+    public DateTime FechaHora { get; set; }
 }
