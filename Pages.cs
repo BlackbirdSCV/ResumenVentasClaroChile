@@ -61,6 +61,8 @@ public class NuevaVentaPage : ContentPage
     readonly Picker plan = new() { Title = "Plan*" }, estado = new() { Title = "Estado*", ItemsSource = new[] { "Pendiente", "Activa", "Rechazada" }, SelectedIndex = 0 };
     readonly DatePicker fVenta = new() { Date = DateTime.Today }, fAct = new() { Date = DateTime.Today };
     readonly Label actLbl = new() { Text = "Fecha de activación", IsVisible = false };
+    readonly Switch voucher = Ui.Interruptor();
+    readonly Editor comentario = new() { Placeholder = "Comentario sobre la venta (opcional)", HeightRequest = 90, MaxLength = 500 };
     List<PlanMovil> planes = new();
 
     public NuevaVentaPage()
@@ -75,10 +77,18 @@ public class NuevaVentaPage : ContentPage
         };
         var guardar = new Button { Text = "GUARDAR", BackgroundColor = Ui.Rojo, TextColor = Colors.White, FontAttributes = FontAttributes.Bold };
         guardar.Clicked += async (_, _) => await Guardar();
-        Content = new ScrollView { Content = new VerticalStackLayout { Padding = 16, Children = { Ui.Card(new VerticalStackLayout { Spacing = 8, Children = {
-            Ui.Titulo("CLIENTE"), rut, nombre, apellido, Ui.Titulo("VENTA"), pcs, plan, estado,
-            new Label { Text = "Fecha de venta" }, fVenta, actLbl, fAct, guardar } }) } } };
-            BackgroundColor = Ui.Rojo;
+
+        var filaVoucher = new Grid { ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) } };
+        filaVoucher.Add(new Label { Text = "Voucher de pago de la competencia ingresado", TextColor = Ui.Pizarra, VerticalOptions = LayoutOptions.Center }, 0, 0);
+        filaVoucher.Add(voucher, 1, 0);
+
+        Content = new ScrollView { Content = new VerticalStackLayout { Padding = 16, Children = {
+            Ui.Card(new VerticalStackLayout { Spacing = 8, Children = {
+                Ui.Titulo("CLIENTE"), rut, nombre, apellido, Ui.Titulo("VENTA"), pcs, plan, estado,
+                new Label { Text = "Fecha de venta" }, fVenta, actLbl, fAct,
+                filaVoucher, comentario, guardar } }) } } };
+
+        BackgroundColor = Ui.Rojo;
         SafeAreaEdges = new SafeAreaEdges(SafeAreaRegions.All);
         Content = Ui.ConEncabezado("Nueva venta", Content, async () => await Navigation.PopModalAsync());
     }
@@ -100,9 +110,11 @@ public class NuevaVentaPage : ContentPage
 
         var est = (string)estado.SelectedItem;
         DateTime? act = est == "Activa" ? Ui.D(fAct.Date) : null;
-        await Db.GuardarVenta(rut.Text, nombre.Text.Trim(), apellido.Text.Trim(), pcs.Text, planes[plan.SelectedIndex].Id, Ui.D(fVenta.Date), est, act);
+        var coment = string.IsNullOrWhiteSpace(comentario.Text) ? null : comentario.Text.Trim();
+        await Db.GuardarVenta(rut.Text, nombre.Text.Trim(), apellido.Text.Trim(), pcs.Text, planes[plan.SelectedIndex].Id, Ui.D(fVenta.Date), est, act, voucher.IsToggled, coment);
         Ui.AvisarCambio();
         rut.Text = nombre.Text = apellido.Text = pcs.Text = ""; plan.SelectedIndex = -1; estado.SelectedIndex = 0;
+        voucher.IsToggled = false; comentario.Text = "";
         await DisplayAlert("Listo", "Venta guardada.", "OK");
     }
 }
@@ -353,6 +365,8 @@ public class EditarVentaPage : ContentPage
     readonly Picker plan = new() { Title = "Plan*", TextColor = Ui.Pizarra }, estado = new() { Title = "Estado*", ItemsSource = Estados, TextColor = Ui.Pizarra };
     readonly DatePicker fVenta = new(), fAct = new();
     readonly Label actLbl = new() { Text = "Fecha de activación", TextColor = Ui.Pizarra };
+    readonly Switch voucher = Ui.Interruptor();
+    readonly Editor comentario = new() { Placeholder = "Comentario sobre la venta (opcional)", HeightRequest = 90, MaxLength = 500 };
     List<PlanMovil> planes = new();
     bool cargado;
 
@@ -364,12 +378,18 @@ public class EditarVentaPage : ContentPage
         var cancelar = new Button { Text = "Cancelar", BackgroundColor = Colors.Gray, TextColor = Colors.White };
         guardar.Clicked += async (_, _) => await Guardar();
         cancelar.Clicked += async (_, _) => await Navigation.PopAsync();
+
+        var filaVoucher = new Grid { ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) } };
+        filaVoucher.Add(new Label { Text = "Voucher de pago de la competencia ingresado", TextColor = Ui.Pizarra, VerticalOptions = LayoutOptions.Center }, 0, 0);
+        filaVoucher.Add(voucher, 1, 0);
+
         Content = new ScrollView { Content = new VerticalStackLayout { Padding = 16, Children = {
             Ui.Card(new VerticalStackLayout { Spacing = 8, Children = {
                 Ui.Titulo("CLIENTE"), rut, nombre, apellido,
                 new Label { Text = "Si el cliente tiene varias ventas, un cambio de nombre se aplica a todas.", FontSize = 12, TextColor = Colors.Gray },
                 Ui.Titulo("VENTA"), pcs, plan, estado,
-                new Label { Text = "Fecha de venta", TextColor = Ui.Pizarra }, fVenta, actLbl, fAct, guardar, cancelar } }) } } };
+                new Label { Text = "Fecha de venta", TextColor = Ui.Pizarra }, fVenta, actLbl, fAct,
+                filaVoucher, comentario, guardar, cancelar } }) } } };
     }
 
     protected override async void OnAppearing()
@@ -386,6 +406,8 @@ public class EditarVentaPage : ContentPage
         rut.Text = c.Rut; nombre.Text = c.Nombre; apellido.Text = c.Apellido; pcs.Text = v.Pcs;
         fVenta.Date = v.FechaVenta;
         fAct.Date = v.FechaActivacion ?? DateTime.Today;
+        voucher.IsToggled = v.VoucherCompetencia;
+        comentario.Text = v.Comentario ?? "";
         estado.SelectedIndex = Math.Max(Array.IndexOf(Estados, v.Estado), 0);
     }
 
@@ -400,7 +422,8 @@ public class EditarVentaPage : ContentPage
         DateTime? act = est == "Activa" ? Ui.D(fAct.Date) : null;
         if (act < fv && !await DisplayAlert("Fechas", "La activación es anterior a la venta. ¿Guardar igual?", "Guardar", "Revisar")) return;
 
-        await Db.ActualizarVenta(id, rut.Text, nombre.Text.Trim(), apellido.Text.Trim(), pcs.Text, planes[plan.SelectedIndex].Id, fv, est, act);
+        var coment = string.IsNullOrWhiteSpace(comentario.Text) ? null : comentario.Text.Trim();
+        await Db.ActualizarVenta(id, rut.Text, nombre.Text.Trim(), apellido.Text.Trim(), pcs.Text, planes[plan.SelectedIndex].Id, fv, est, act, voucher.IsToggled, coment);
         await Navigation.PopAsync();
     }
 }

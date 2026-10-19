@@ -13,6 +13,8 @@ public class Venta
     public DateTime FechaVenta { get; set; }
     public DateTime? FechaActivacion { get; set; }
     public string Estado { get; set; } = "Pendiente"; // Pendiente | Activa | Rechazada
+    public bool VoucherCompetencia { get; set; }
+    public string? Comentario { get; set; }
 }
 public class Fila
 {
@@ -20,6 +22,8 @@ public class Fila
     public string Pcs { get; set; } = ""; public string NombrePlan { get; set; } = ""; public string Estado { get; set; } = "";
     public string FechaVenta { get; set; } = ""; public string? FechaActivacion { get; set; }
     public string PcsFmt => Pcs.Length == 9 ? $"{Pcs[0]} {Pcs[1..5]} {Pcs[5..]}" : Pcs;
+    public bool VoucherCompetencia { get; set; }
+    public string? Comentario { get; set; }
 }
 
 public static class Db
@@ -27,7 +31,7 @@ public static class Db
     static Lazy<Task<SQLiteAsyncConnection>> _c = new(Init);
     static Task<SQLiteAsyncConnection> C() => _c.Value;
 
-    const string Base = @"SELECT v.Id, c.Nombre||' '||c.Apellido AS Cliente, c.Rut, v.Pcs, p.Nombre AS NombrePlan, v.Estado,
+    const string Base = @"SELECT v.Id, c.Nombre||' '||c.Apellido AS Cliente, c.Rut, v.Pcs, p.Nombre AS NombrePlan, v.Estado, v.VoucherCompetencia, v.Comentario,
       strftime('%d/%m/%Y',v.FechaVenta) AS FechaVenta, strftime('%d/%m/%Y',v.FechaActivacion) AS FechaActivacion
       FROM Venta v JOIN Cliente c ON c.Id=v.IdCliente JOIN PlanMovil p ON p.Id=v.IdPlan ";
 
@@ -115,13 +119,13 @@ public static async Task<bool> EliminarPlan(int id)
         rut = NormRut(rut);
         return await (await C()).Table<Cliente>().Where(x => x.Rut == rut).FirstOrDefaultAsync();
     }
-    public static async Task GuardarVenta(string rut, string nombre, string apellido, string pcs, int idPlan, DateTime fv, string estado, DateTime? fa)
-    {
-        var c = await C();
-        var cli = await ClientePorRut(rut);
-        if (cli == null) { cli = new Cliente { Rut = NormRut(rut), Nombre = nombre, Apellido = apellido }; await c.InsertAsync(cli); }
-        await c.InsertAsync(new Venta { IdCliente = cli.Id, Pcs = pcs.Replace(" ", ""), IdPlan = idPlan, FechaVenta = fv, FechaActivacion = fa, Estado = estado });
-    }
+    public static async Task GuardarVenta(string rut, string nombre, string apellido, string pcs, int idPlan, DateTime fv, string estado, DateTime? fa, bool voucher = false, string? comentario = null)
+{
+    var c = await C();
+    var cli = await ClientePorRut(rut);
+    if (cli == null) { cli = new Cliente { Rut = NormRut(rut), Nombre = nombre, Apellido = apellido }; await c.InsertAsync(cli); }
+    await c.InsertAsync(new Venta { IdCliente = cli.Id, Pcs = pcs.Replace(" ", ""), IdPlan = idPlan, FechaVenta = fv, FechaActivacion = fa, Estado = estado, VoucherCompetencia = voucher, Comentario = comentario });
+}
     public static async Task Activar(int id) =>
         await (await C()).ExecuteAsync("UPDATE Venta SET Estado='Activa', FechaActivacion=? WHERE Id=?", DateTime.Today, id);
     public static async Task Eliminar(int id) => await (await C()).DeleteAsync<Venta>(id);
@@ -156,7 +160,7 @@ public static async Task<(Venta, Cliente)?> ObtenerVenta(int id)
     return cli == null ? null : (v, cli);
 }
 
-public static async Task ActualizarVenta(int id, string rut, string nombre, string apellido, string pcs, int idPlan, DateTime fv, string estado, DateTime? fa)
+public static async Task ActualizarVenta(int id, string rut, string nombre, string apellido, string pcs, int idPlan, DateTime fv, string estado, DateTime? fa, bool voucher = false, string? comentario = null)
 {
     var c = await C();
     var v = await c.FindAsync<Venta>(id);
@@ -174,9 +178,10 @@ public static async Task ActualizarVenta(int id, string rut, string nombre, stri
     if (cli.Id == 0) await c.InsertAsync(cli); else await c.UpdateAsync(cli);
 
     v.IdCliente = cli.Id; v.Pcs = pcs.Replace(" ", ""); v.IdPlan = idPlan;
-    v.FechaVenta = fv; v.Estado = estado; v.FechaActivacion = estado == "Activa" ? fa : null;
+    v.FechaVenta = fv; v.Estado = estado; v.FechaActivacion = estado == "Activa" ? fa : null; v.VoucherCompetencia = voucher; v.Comentario = comentario;
     await c.UpdateAsync(v);
     await c.ExecuteAsync("DELETE FROM Cliente WHERE Id NOT IN (SELECT IdCliente FROM Venta)"); // limpia clientes sin ventas
+    
 }
 
 public static async Task<Kit?> KitPorSim(string sim) =>
