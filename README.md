@@ -1,11 +1,10 @@
-[README.md](https://github.com/user-attachments/files/33363067/README.md)
 # Resumen de Ventas
 
 Aplicación Android para llevar el control de ventas de líneas móviles desde el teléfono: registrar ventas, revisar pendientes, ver resúmenes por mes y respaldar los datos en tu propio Google Drive.
 
 > **Aplicación independiente.** No es un producto oficial ni está afiliada, patrocinada ni respaldada por Claro ni por ninguna otra empresa. Las marcas mencionadas pertenecen a sus respectivos dueños.
 
-**Última versión: 1.2**
+**Última versión: 1.3**
 
 ---
 
@@ -30,6 +29,7 @@ La guía de uso en PDF está en el mismo apartado de Releases.
 - **Revisar el resumen mensual** con navegación por mes o por rango de fechas, ordenamiento (por fecha o nombre) y filtros por plan y por estado.
 - **Copiar con un toque** el RUT (sin puntos ni guión) y el teléfono (sin espacios).
 - **Editar ventas ya guardadas**, incluida la fecha de activación.
+- **Registrar kits prepago** en la pestaña **Kits**: escanea con la cámara el código de barras de la SIM (o escribe el número a mano) y la app guarda el número con la fecha y hora del registro. Avisa si la SIM ya estaba registrada y muestra el total del mes.
 - **Administrar planes** desde **Más**: crear, renombrar, cambiar su valor o eliminarlos.
 - **Abrir páginas web de consulta** dentro de la app (pago y consulta de números portados).
 - **Respaldar y restaurar** tus datos en Google Drive.
@@ -41,6 +41,7 @@ La guía de uso en PDF está en el mismo apartado de Releases.
 - **C# y .NET MAUI** (.NET 11 en versión preliminar), solo para Android.
 - **SQLite** (`sqlite-net-pcl`) para la base de datos local.
 - **Google Drive API v3** con OAuth 2.0 (PKCE) y la carpeta privada de la app (`appDataFolder`) para los respaldos.
+- **BarcodeScanning.Native.Maui** para leer códigos de barras con la cámara (basado en ML Kit de Google en Android).
 - **WebView** con JavaScript inyectado para rellenar campos de páginas externas.
 - Interfaz construida en código C#, con navegación de `Shell`.
 
@@ -49,10 +50,10 @@ La guía de uso en PDF está en el mismo apartado de Releases.
 | Archivo | Contenido |
 |---|---|
 | `Data.cs` | Modelos, base de datos SQLite y consultas |
-| `Pages.cs` | Pantallas de la app |
+| `Pages.cs` | Pantallas de la app, incluido el escáner de SIM |
 | `Ui.cs` | Componentes visuales compartidos (tarjetas, botón flotante, encabezados) |
 | `DriveSync.cs` | Inicio de sesión con Google y respaldo/restauración en Drive |
-| `AppShell.xaml` | Navegación con barra inferior |
+| `AppShell.xaml` | Navegación con barra inferior: Inicio, Resumen, Kits y Más |
 
 ---
 
@@ -78,13 +79,14 @@ Usa **Subir respaldo a Drive** al terminar tu jornada. **Restaurar desde Drive**
 - La app **no tiene servidores propios** y no envía tus datos a ningún tercero.
 - Si conectas Google Drive, el respaldo se guarda en una **carpeta oculta de la app dentro de tu propio Drive** (permiso `drive.appdata`). Nadie más puede verlo, y la app no puede leer tus demás archivos.
 - Puedes **desconectar tu cuenta** desde **Más > Respaldo**, o revocar el acceso en tu cuenta de Google en *Seguridad > Conexiones con terceros*.
+- La app pide permiso de **cámara** solo para escanear el código de barras de la SIM. No toma ni guarda fotos.
 - Las páginas web integradas son sitios externos con sus propias políticas de privacidad.
 
 ---
 
 ## Compilar desde el código
 
-Requisitos: SDK de .NET con la carga de trabajo de MAUI para Android, JDK 17 y el SDK de Android.
+Requisitos: SDK de .NET con la carga de trabajo de MAUI para Android, JDK 17 y el SDK de Android. Las dependencias (SQLite y el lector de códigos de barras) se restauran solas con NuGet.
 
 ```
 dotnet build -t:Run -f net11.0-android
@@ -95,6 +97,10 @@ El respaldo en Drive necesita **tu propio ID de cliente de OAuth** (tipo Android
 ---
 
 ## Historial de versiones
+
+### v1.3
+- **Nuevo:** pestaña **Kits** en la barra inferior, entre **Resumen** y **Más**, para registrar kits prepago con SIM. Se escanea el código de barras con la cámara o se escribe el número, y se guarda con la fecha y hora. Avisa si la SIM ya estaba registrada y muestra el total del mes.
+- **Nuevo:** la app solicita permiso de cámara, usado solo para el escáner.
 
 ### v1.2
 - **Nuevo:** botón **Revisar activación** en cada venta pendiente del Inicio. Abre la consulta de números portados e intenta rellenar el número de la venta, que además se copia al portapapeles.
