@@ -4,7 +4,7 @@ Aplicación Android para llevar el control de ventas de líneas móviles desde e
 
 > **Aplicación independiente.** No es un producto oficial ni está afiliada, patrocinada ni respaldada por Claro ni por ninguna otra empresa. Las marcas mencionadas pertenecen a sus respectivos dueños.
 
-**Última versión: 1.3**
+**Última versión: 1.4**
 
 ---
 
@@ -22,7 +22,7 @@ La guía de uso en PDF está en el mismo apartado de Releases.
 
 ## Qué puedes hacer
 
-- **Registrar ventas** con el botón flotante **Nueva Venta**, disponible en las pantallas principales: RUT, nombre, apellido, teléfono, plan, estado y fechas. Si el RUT ya existe, la app autocompleta los datos del cliente.
+- **Registrar ventas** con el botón flotante **Nueva Venta**, disponible en las pantallas principales: RUT, nombre, apellido, teléfono, plan, estado y fechas. Si el RUT ya existe, la app autocompleta los datos del cliente. También puedes marcar si se ingresó un **voucher de pago de la competencia** y escribir un **comentario** opcional sobre la venta.
 - **Seguir las ventas pendientes** desde **Inicio**: marcarlas como activas, editarlas o eliminarlas. Arriba ves un contador con las **ventas activadas del mes en curso**.
 - **Revisar si una venta se activó** con el botón **Revisar activación**, que abre la consulta de portabilidad dentro de la app e intenta escribir el número de la venta en el campo. El número también queda copiado en el portapapeles.
 - **Revisar si un cliente pagó** con el botón **Revisar pago** de cada venta en **Resumen**, que copia el RUT del cliente y abre el Portal Pagos, e intenta escribirlo en el campo correspondiente.
@@ -98,6 +98,10 @@ El respaldo en Drive necesita **tu propio ID de cliente de OAuth** (tipo Android
 
 ## Historial de versiones
 
+### v1.4
+- **Nuevo:** en **Nueva venta** y **Editar venta**, un interruptor para indicar si se ingresó un voucher de pago de la competencia, y un campo de comentario opcional. Ambos datos se muestran en las tarjetas de **Inicio** y **Resumen**, y se incluyen en el respaldo de Drive.
+- **Mejora:** el interruptor usa los colores de la app.
+
 ### v1.3
 - **Nuevo:** pestaña **Kits** en la barra inferior, entre **Resumen** y **Más**, para registrar kits prepago con SIM. Se escanea el código de barras con la cámara o se escribe el número, y se guarda con la fecha y hora. Avisa si la SIM ya estaba registrada y muestra el total del mes.
 - **Nuevo:** la app solicita permiso de cámara, usado solo para el escáner.
@@ -123,10 +127,6 @@ El respaldo en Drive necesita **tu propio ID de cliente de OAuth** (tipo Android
 
 ## Licencia
 
-Copyright (c) 2026 BlackbirdSCV. Todos los derechos reservados.
+Copyright (c) 2026 Sebastián Cornejo. Todos los derechos reservados.
 
 El código se publica como **muestra de trabajo** y puede consultarse para conocer cómo está hecho. No se permite copiarlo, modificarlo, redistribuirlo ni publicar versiones derivadas sin autorización escrita. La aplicación se distribuye de forma gratuita para uso personal.
-
-## Contacto
-
-<!-- Agrega aquí cómo contactarte: correo o enlace -->
